@@ -13,7 +13,7 @@ import logging
 DEVICE = os.getenv('DEVICE', 'cpu')
 MODEL_SIZE = os.getenv('MODEL_SIZE', '256M')
 PORT = int(os.getenv('PORT', '7860'))
-MEDIA_DIR = os.getenv('MEDIA_DIR', '/content/media')
+MEDIA_DIR = os.getenv('MEDIA_DIR', '/home/docker_user/smolvlm2/media')
 
 # Cache directories from environment
 CACHE_DIR = os.getenv('TRANSFORMERS_CACHE', '/home/docker_user/smolvlm2/cache')
@@ -139,6 +139,8 @@ def answer(message, history):
 
 def device_change(value):
     global pipe
+    global DEVICE
+
     can_change = True
     if value == 'cuda':
         if not torch.cuda.is_available():
@@ -154,7 +156,9 @@ def device_change(value):
             pipe.device = torch.device(value)
         logger.info('Device lock released')
 
-    return gr.Radio(label='Device', choices=['cpu', 'cuda'], value=value, interactive=True)
+    DEVICE = value
+
+    return gr.Radio(label='Device', choices=['cpu', 'cuda'], value=DEVICE, interactive=True)
 
 def model_size_change(value):
     global pipe
