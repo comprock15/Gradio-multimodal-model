@@ -4,6 +4,7 @@ This repository demonstrates Gradio web-interface for multimodal model [SmolVLM2
 
 Model use-cases:
 - Image description
+- Optical character recognition
 - Video description
 
 ## Get started

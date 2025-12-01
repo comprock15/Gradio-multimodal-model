@@ -198,6 +198,7 @@ with demo:
     # Примеры из локальных файлов в Docker образе
     examples_list = [
         {'text': 'Describe the image', 'files': [os.path.join(MEDIA_DIR, 'image.jpg')]},
+        {'text': 'Extract text from the image', 'files': [os.path.join(MEDIA_DIR, 'image_with_text.png')]},
         {'text': 'Describe the video', 'files': [os.path.join(MEDIA_DIR, 'video.mp4')]},
     ]
 
