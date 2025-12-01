@@ -1,5 +1,11 @@
 # Gradio-multimodal-model
 
+This repository demonstrates Gradio web-interface for multimodal model [SmolVLM2](https://huggingface.co/blog/smolvlm2).
+
+Model use-cases:
+- Image description
+- Video description
+
 ## Get started
 
 1. Clone this repository
