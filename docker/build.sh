@@ -5,8 +5,8 @@ source docker/.env
 set +a
 
 # Only user configuration for build
-UID=1001
-GID=1001
+UID=1000
+GID=1000
 USER=docker_user
 IMAGE_NAME=${IMAGE_NAME:-smolvlm2-app-image}
 

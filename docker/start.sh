@@ -1,13 +1,13 @@
 #!/bin/bash
 
 set -a
-source .env
+source docker/.env
 set +a
 
 # Runtime configuration (not in .env)
 DEVICE=${1:-cuda} # cuda/cpu
 MODEL_SIZE=${2:-256M} # 256M/500M
-PORT=${3:-7860}
+PORT=${3:-7865}
 
 echo "Runtime configuration:"
 echo "DEVICE: $DEVICE"

@@ -1,4 +1,4 @@
-FROM python:3.10-slim
+FROM huggingface/transformers-pytorch-gpu:latest
 
 SHELL [ "/bin/bash", "-c" ]
 ENV DEBIAN_FRONTEND=noninteractive
@@ -11,6 +11,19 @@ ARG USER=docker_user
 RUN useradd -m ${USER} --uid=${UID} \
     && usermod -s /bin/bash ${USER} \
     && usermod -a -G sudo ${USER}
+
+# Установка Python 3.10
+RUN apt-get update && apt-get install -y \
+    python3.10 \
+    python3-pip \
+    python3.10-venv \
+    && rm -rf /var/lib/apt/lists/*
+
+# Создаем симлинк python -> python3 (опционально)
+RUN ln -s /usr/bin/python3 /usr/bin/python
+
+# Проверяем установку
+RUN python --version && pip --version
 
 WORKDIR /home/${USER}/smolvml2
 COPY ../requirements.txt /home/${USER}/smolvml2/

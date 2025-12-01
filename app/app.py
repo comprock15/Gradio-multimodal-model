@@ -6,19 +6,18 @@ import torch
 import threading
 import logging
 
-# Add the parent directory to Python path to import app modules
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add the parent directory to Python path
+#sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Configuration from environment variables
 DEVICE = os.getenv('DEVICE', 'cpu')
 MODEL_SIZE = os.getenv('MODEL_SIZE', '256M')
 PORT = int(os.getenv('PORT', '7860'))
+MEDIA_DIR = os.getenv('MEDIA_DIR', '/content/media')
 
 # Cache directories from environment
 CACHE_DIR = os.getenv('TRANSFORMERS_CACHE', '/home/docker_user/smolvlm2/cache')
 MODEL_DIR = os.getenv('MODEL_DIR', '/home/docker_user/smolvlm2/models')
-
-MEDIA_DIR = os.getenv('MEDIA_DIR', '/home/docker_user/smolvml2/media')
 
 # Ensure directories exist
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -26,7 +25,7 @@ os.makedirs(MODEL_DIR, exist_ok=True)
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
@@ -45,20 +44,20 @@ device_lock = threading.Lock()
 def initialize_pipeline(device=DEVICE, model_size=MODEL_SIZE):
     """Initialize the pipeline with specified device and model size"""
     model_name = get_model_name(model_size)
-    
+
     # Auto-detect device if cuda requested but not available
     if device == 'cuda' and not torch.cuda.is_available():
         device = 'cpu'
         logger.warning("CUDA not available, falling back to CPU")
-    
+
     logger.info(f"Loading model: {model_name}")
     logger.info(f"Device: {device}")
     logger.info(f"Model size: {model_size}")
     logger.info(f"Cache directory: {CACHE_DIR}")
     logger.info(f"Model directory: {MODEL_DIR}")
-    
+
     torch_dtype = torch.float16 if device == 'cuda' else torch.float32
-    
+
     try:
         pipe = pipeline(
             "image-text-to-text",
@@ -74,19 +73,18 @@ def initialize_pipeline(device=DEVICE, model_size=MODEL_SIZE):
         logger.error(f"Error loading model: {e}")
         raise
 
-# Initialize pipeline with environment configuration
 pipe = initialize_pipeline()
 
-system_prompt = {}  # stores last media sent so that user doesn't have to load it again
+# Auto-detect device if cuda requested but not available
+if DEVICE == 'cuda' and not torch.cuda.is_available():
+    logger.warning("CUDA not available, falling back to CPU")
+    DEVICE = 'cpu'
+
+system_prompt = dict()  # stores last media sent so that user doesn't have to load it again
 
 # Supported file formats
 image_type = ['.png', '.jpg', '.jpeg']
 video_type = ['.mp4']
-
-
-def get_media_path(filename):
-    """Get full path to media file"""
-    return os.path.join(MEDIA_DIR, filename)
 
 def get_content_type(file):
     ext = '.' + file.split('.')[-1]
@@ -117,6 +115,7 @@ def update_last_media(media):
     logger.info(f'Updated system prompt: {system_prompt}')
 
 def answer(message, history):
+    global pipe
     logger.info(f'Message: {message}')
     logger.info(f'History: {history}')
 
@@ -127,10 +126,10 @@ def answer(message, history):
     if not media and system_prompt:
         text = [system_prompt] + text
 
-    logger.info('Processing request...')
+    logger.info('Trying to acquire device lock...')
     with device_lock:
         result = pipe(text=text)
-    logger.info('Request processed')
+    logger.info('Device lock released')
 
     if media:
         update_last_media(media)
@@ -144,49 +143,59 @@ def device_change(value):
     if value == 'cuda':
         if not torch.cuda.is_available():
             value = 'cpu'
-            logger.warning("CUDA isn't available!")
+            logger.warning(f"CUDA isn't available!")
             gr.Warning("CUDA isn't available!", duration=5)
             can_change = False
 
     if can_change:
-        logger.info(f'Changing device to: {value}')
+        logger.info('Trying to acquire device lock...')
         with device_lock:
-            pipe = initialize_pipeline(device=value, model_size=MODEL_SIZE)
-        logger.info(f'Device changed to: {value}')
+            pipe.model.to(value)
+            pipe.device = torch.device(value)
+        logger.info('Device lock released')
 
     return gr.Radio(label='Device', choices=['cpu', 'cuda'], value=value, interactive=True)
 
 def model_size_change(value):
     global pipe
     logger.info(f'Changing model size to: {value}')
+    logger.info('Trying to acquire device lock...')
     with device_lock:
-        pipe = initialize_pipeline(device=DEVICE, model_size=value)
-    logger.info(f'Model size changed to: {value}')
-    
+        # Reinitialize pipeline with new model size
+        pipe = pipeline(
+            "image-text-to-text",
+            model=get_model_name(value),
+            torch_dtype=torch.float16 if DEVICE == 'cuda' else torch.float32,
+            device=DEVICE,
+            cache_dir=CACHE_DIR,
+            model_kwargs={'cache_dir': MODEL_DIR}
+        )
+    logger.info('Device lock released')
+
     return gr.Dropdown(label='Model Size', choices=list(MODEL_CONFIGS.keys()), value=value, interactive=True)
 
-# Create interface
 demo = gr.Blocks(theme=gr.themes.Ocean())
 
 with demo:
     gr.Header("SmolVLM2")
-    
+
     with gr.Row():
-        device_radio = gr.Radio(
-            label='Device', 
-            choices=['cpu', 'cuda'], 
-            value=DEVICE, 
-            interactive=True
-        )
+        device_radio = gr.Radio(label='Device', choices=['cpu', 'cuda'], value=DEVICE, interactive=True)
         model_size_dropdown = gr.Dropdown(
-            label='Model Size', 
-            choices=list(MODEL_CONFIGS.keys()), 
-            value=MODEL_SIZE, 
+            label='Model Size',
+            choices=list(MODEL_CONFIGS.keys()),
+            value=MODEL_SIZE,
             interactive=True
         )
-    
+
     device_radio.input(fn=device_change, inputs=device_radio, outputs=device_radio)
     model_size_dropdown.input(fn=model_size_change, inputs=model_size_dropdown, outputs=model_size_dropdown)
+
+    # Примеры из локальных файлов в Docker образе
+    examples_list = [
+        {'text': 'Describe the image', 'files': [os.path.join(MEDIA_DIR, 'image.jpg')]},
+        {'text': 'Describe the video', 'files': [os.path.join(MEDIA_DIR, 'video.mp4')]},
+    ]
 
     gr.ChatInterface(
         fn=answer,
@@ -197,10 +206,7 @@ with demo:
             file_count='multiple',
         ),
         multimodal=True,
-        examples=[
-            {'text': 'Describe the image', 'files': [get_media_path('image.jpg')]},
-            {'text': 'Describe the video', 'files': [get_media_path('video.mp4')]},
-        ]
+        examples=examples_list
     )
 
 if __name__ == "__main__":
