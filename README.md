@@ -22,7 +22,9 @@ bash docker/build.sh
 bash docker.start.sh
 ```
 
-## Configure parameters
+If you start you container for the first time, the webpage can be unavailable for some time as models are not downloaded yet. Wait for a bit and refresh the page.
+
+## How to configure parameters
 
 You can configure some parameters in `docker/.env`:
 ```
